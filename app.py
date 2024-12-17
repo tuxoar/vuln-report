@@ -23,6 +23,10 @@ def home():
     st.title(my_titles[0])
     st.write("Welcome to the Home Page! Use the buttons above to crunch a report on the type of data you're working with.")
 
+def colsizer(df):
+    col_height=(len(df)+1)*35
+    return col_height
+
 def flatten_columns(json_data, parent_key="", sep="."):
     """
     Flattens columns in a JSON object, supporting nested dictionaries and lists.
@@ -333,8 +337,7 @@ def inspector():
     if st.session_state.active_page == my_titles[3]:
         inspector_uploaded_file = st.file_uploader("Upload an Inspector file for analysis:",type=["json"])
         if "ins" in st.session_state.uploaded_files:
-            st.write("Previously uploaded file:")
-            st.write(st.session_state.uploaded_files['ins'].name)
+            st.write(f"Utilizing previously uploaded file: {st.session_state.uploaded_files['ins'].name}")
             inspector_file=st.session_state.uploaded_files['ins']
             inspector_file.seek(0)
             df = pd.read_json(inspector_file)
@@ -342,9 +345,111 @@ def inspector():
             st.success(f"File uploaded: {inspector_uploaded_file.name}")
             st.session_state.uploaded_files['ins']=inspector_uploaded_file
             df = pd.read_json(inspector_uploaded_file)
-            st.write(df)
+           
     try:
-        df
+        if not df.empty:   
+            # Strip timezone
+            df['CreatedAt'] = pd.to_datetime(df['CreatedAt'],format='ISO8601').dt.tz_convert(None)
+            
+            # Flatten the columns that contain JSON structures
+            df=pd.json_normalize(df.apply(flatten_columns,axis=1))
+            
+            st.subheader("Choose a date range:")
+            d1,d2 = st.columns(2)
+            with d1:
+                og_start_date = st.date_input("Start Date",default_start)
+                start_date = pd.to_datetime(og_start_date,format='ISO8601')
+            with d2: 
+                og_end_date = st.date_input("End Date",today)
+                end_date = pd.to_datetime(og_end_date,format='ISO8601')
+
+            # Filter out based on date range entered
+            df_filtered = df[(df['CreatedAt'] >= start_date) & (df['CreatedAt'] <= end_date)]
+           
+            
+            # RecordState - ACTIVE / ARCHIVED
+            # Filter by Types, Region, Resources[0].Type, Vulnerabilities[0].Id
+            # Define all severity levels in case some are missing
+            all_severity = ["CRITICAL","HIGH","MEDIUM","LOW","INFORMATIONAL"]
+            all_status=["ACTIVE","ARCHIVED"]
+            
+            # Create pivot table and reindex to include all severities
+            df_pivot = (
+                pd.pivot_table(
+                    df_filtered,
+                    index="Severity.Label",
+                    columns="RecordState",
+                    values="CreatedAt",
+                    aggfunc="count",
+                    fill_value=0
+                )
+                .reindex(all_severity, fill_value=0)
+                .reindex(columns=all_status,fill_value=0)
+                .reset_index()
+            )
+            # Calculate fix rate and format
+            df_pivot["Fix Rate"] = (
+                (df_pivot["ARCHIVED"] / (df_pivot["ARCHIVED"] + df_pivot["ACTIVE"]))
+                .fillna(0)
+                .mul(100)
+                .round(2)
+                .astype(str) + "%"
+            )
+            df_pivot=df_pivot.rename(columns={"Severity.Label":"Severity"})
+
+            # Create pivot table and reindex to include all severities
+            df_pivot_type = (
+                pd.pivot_table(
+                    df_filtered,
+                    index="Resources[0].Type",
+                    columns="RecordState",
+                    values="CreatedAt",
+                    aggfunc="count",
+                    fill_value=0
+                )
+                .reset_index()
+            )
+            # Calculate fix rate and format
+            df_pivot_type["Fix Rate"] = (
+                (df_pivot_type["ARCHIVED"] / (df_pivot_type["ARCHIVED"] + df_pivot_type["ACTIVE"]))
+                .fillna(0)
+                .mul(100)
+                .round(2)
+                .astype(str) + "%"
+            )
+            df_pivot_type=df_pivot_type.rename(columns={"Resources[0].Type":"Resource Type"})
+
+            st.subheader("Overall Fix Rate")
+            fr1,fr2 = st.columns(2)
+            with fr1:
+                st.dataframe(df_pivot,hide_index=True,width=500)
+            with fr2:
+                chart_data= df_pivot.set_index("Severity")[["ACTIVE","ARCHIVED"]]
+                
+                st.bar_chart(chart_data)
+            
+            st.subheader("Fix Rate by Resource Type")
+            fr3,fr4 = st.columns(2)
+            with fr3:
+                st.dataframe(df_pivot_type,hide_index=True,width=500)
+            with fr4:
+                chart_data= df_pivot_type.set_index("Resource Type")[["ACTIVE","ARCHIVED"]]
+                
+                st.bar_chart(chart_data)
+
+            st.subheader("Data Filter")
+            columns = ["All","Types", "RecordState","Region", "Resources[0].Type", "Vulnerabilities[0].Id"]
+            
+            selected_column = st.selectbox("Select a column to filter by",columns)
+            if not selected_column == "All":
+                unique_values=df[selected_column].unique()
+                selected_value=st.selectbox("Select Values",unique_values)
+                filtered_df=df[df[selected_column]==selected_value]
+            else:
+                filtered_df=df
+            st.dataframe(filtered_df,hide_index=True,height=800)
+    
+        
     
     except NameError:
         st.write("Waiting for data file.")
@@ -386,7 +491,8 @@ def inventory():
             st.subheader("Pivot by Resource Type")
             type1,type2 = st.columns(2)
             with type1: 
-                st.dataframe(type_pivot,hide_index=True)
+                
+                st.dataframe(type_pivot,hide_index=True,height=colsizer(type_pivot),width=500)
             with type2:
                 chart_data = type_pivot.set_index('Resource Type')['Count']
                 st.bar_chart(chart_data,horizontal=True)
@@ -394,14 +500,14 @@ def inventory():
             st.subheader("Pivot by Region")
             region1,region2 = st.columns(2)
             with region1: 
-                st.dataframe(region_pivot,hide_index=True)
+                st.dataframe(region_pivot,hide_index=True,height=colsizer(region_pivot),width=500)
             with region2:
                 chart_data = region_pivot.set_index('Region')['Count']
                 st.bar_chart(chart_data,horizontal=True)
 
             st.subheader("Filtered Data")
             df["AWS Account"]=df["AWS Account"].astype(str)
-            st.dataframe(df,hide_index=True)
+            st.dataframe(df,hide_index=True, height=1000)
     
     except NameError:
         st.write("Waiting for data file.")
