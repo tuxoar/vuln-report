@@ -66,8 +66,8 @@ def sast():
             st.session_state.uploaded_files['sast']=sast_uploaded_file
             df = pd.read_json(sast_uploaded_file)
     try:
-        df
-        if len(df)>0:   
+        #st.dataframe(df,hide_index=True)
+        if not df.empty:   
             # Strip timezone
             df['created_at'] = pd.to_datetime(df['created_at'],format='%Y-%m-%d %H:%M:%S').dt.tz_convert(None)
             
@@ -192,8 +192,8 @@ def sca():
             df = pd.read_json(sca_uploaded_file)
     
     try:
-        df
-        if len(df)>0:   
+        #st.dataframe(df,hide_index=True)
+        if not df.empty:   
             # Strip timezone
             df['created_at'] = pd.to_datetime(df['created_at'],format='%Y-%m-%d %H:%M:%S').dt.tz_convert(None)
             
@@ -332,7 +332,7 @@ def inspector():
     st.title(my_titles[3])
     if st.session_state.active_page == my_titles[3]:
         inspector_uploaded_file = st.file_uploader("Upload an Inspector file for analysis:",type=["json"])
-        if "ins" in st.session_state.uploaded_files :
+        if "ins" in st.session_state.uploaded_files:
             st.write("Previously uploaded file:")
             st.write(st.session_state.uploaded_files['ins'].name)
             inspector_file=st.session_state.uploaded_files['ins']
@@ -351,20 +351,57 @@ def inspector():
 def inventory():
     st.title(my_titles[4])
     if st.session_state.active_page == my_titles[4]:
-        inventory_uploaded_file = st.file_uploader("Upload an AWS Inventory file for analysis:",type=["json"])
-        if "inv" in st.session_state.uploaded_files :
-            st.write("Previously uploaded file:")
-            st.write(st.session_state.uploaded_files['inv'].name)
+        inventory_uploaded_file = st.file_uploader("Upload an AWS Inventory file for analysis:",type=["csv"])
+        if "inv" in st.session_state.uploaded_files:
+            st.write(f"Utilizing previously uploaded file: {st.session_state.uploaded_files['inv'].name}")
             inv_file=st.session_state.uploaded_files['inv']
             inv_file.seek(0)
-            df = pd.read_json(inv_file)
+            df = pd.read_csv(inv_file)
         if inventory_uploaded_file:
             st.success(f"File uploaded: {inventory_uploaded_file.name}")
             st.session_state.uploaded_files['inv']=inventory_uploaded_file
-            df = pd.read_json(inventory_uploaded_file)
-            st.write(df)
+            df = pd.read_csv(inventory_uploaded_file)
     try:
-        df
+        #st.dataframe(df,hide_index=True)
+        if not df.empty:
+            type_pivot = pd.pivot_table(
+                df,
+                index="Resource type",
+                aggfunc="size",
+                fill_value=0
+            )
+            type_pivot=type_pivot.rename("Count").reset_index().sort_values(by="Count",ascending=False)
+            type_pivot.columns = ["Resource Type","Count"]
+
+            region_pivot = pd.pivot_table(
+                df,
+                index="Region",
+                aggfunc="size",
+                fill_value=0
+            )
+            region_pivot=region_pivot.rename("Count").reset_index().sort_values(by="Count",ascending=False)
+            region_pivot.columns = ["Region","Count"]
+            
+
+            st.subheader("Pivot by Resource Type")
+            type1,type2 = st.columns(2)
+            with type1: 
+                st.dataframe(type_pivot,hide_index=True)
+            with type2:
+                chart_data = type_pivot.set_index('Resource Type')['Count']
+                st.bar_chart(chart_data,horizontal=True)
+            
+            st.subheader("Pivot by Region")
+            region1,region2 = st.columns(2)
+            with region1: 
+                st.dataframe(region_pivot,hide_index=True)
+            with region2:
+                chart_data = region_pivot.set_index('Region')['Count']
+                st.bar_chart(chart_data,horizontal=True)
+
+            st.subheader("Filtered Data")
+            df["AWS Account"]=df["AWS Account"].astype(str)
+            st.dataframe(df,hide_index=True)
     
     except NameError:
         st.write("Waiting for data file.")
