@@ -3,7 +3,10 @@ import pandas as pd
 #import matplotlib.pyplot as plt
 from datetime import date, timedelta
 
-st.set_page_config(layout="wide")
+st.set_page_config(
+    layout="wide",
+    menu_items=None
+)
 
 my_titles = ["Home","Semgrep SAST","Semgrep SCA", "AWS Inspector","AWS Inventory"]
 
@@ -21,7 +24,8 @@ default_start = today - timedelta(days=30)
 # Define a function for each section
 def home():
     st.title(my_titles[0])
-    st.write("Welcome to the Home Page! Use the buttons above to crunch a report on the type of data you're working with.")
+    st.write("Use the buttons above to crunch a report on the type of data you're working with.")
+    st.write("With the exception of Inventory requiring CSV, all other reports take JSON as input.")
 
 def colsizer(df):
     col_height=(len(df)+1)*35
@@ -70,10 +74,9 @@ def sast():
             st.session_state.uploaded_files['sast']=sast_uploaded_file
             df = pd.read_json(sast_uploaded_file)
     try:
-        #st.dataframe(df,hide_index=True)
         if not df.empty:   
-            # Strip timezone
-            df['created_at'] = pd.to_datetime(df['created_at'],format='%Y-%m-%d %H:%M:%S').dt.tz_convert(None)
+            df['created_at'] = pd.to_datetime(df['created_at']).dt.tz_convert("UTC")
+            df['status_updated_at'] = pd.to_datetime(df['created_at']).dt.tz_convert("UTC")
             
             # Flatten the columns that contain JSON structures
             df=pd.json_normalize(df.apply(flatten_columns,axis=1))
@@ -84,10 +87,10 @@ def sast():
             d1,d2 = st.columns(2)
             with d1:
                 og_start_date = st.date_input("Start Date",default_start)
-                start_date = pd.to_datetime(og_start_date)
+                start_date = pd.to_datetime(og_start_date).tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
             with d2: 
                 og_end_date = st.date_input("End Date",today)
-                end_date = pd.to_datetime(og_end_date)
+                end_date = pd.to_datetime(og_end_date).tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
 
             # Filter out based on date range entered
             df_filtered = df[(df['created_at'] >= start_date) & (df['created_at'] <= end_date)]
@@ -152,7 +155,7 @@ def sast():
                 pv1, pv2 = st.columns(2)
                 with pv1: 
                     # Display pivot table with fix rate
-                    st.dataframe(df_pivot,hide_index=True)
+                    st.dataframe(df_pivot,hide_index=True,height=colsizer(df_pivot))
                 with pv2:
                     chart_data= df_pivot.set_index("severity")[["open","fixed"]]
                     colors = ["#1f77b4", "#ff7f0e"]
@@ -161,7 +164,7 @@ def sast():
                 st.subheader(f"Findings by CWE")
                 cwe1, cwe2 = st.columns(2)
                 with cwe1:
-                    st.dataframe(df_cwe_pivot,hide_index=True)
+                    st.dataframe(df_cwe_pivot,hide_index=True,height=colsizer(df_cwe_pivot))
                 with cwe2:
                     chart_data = df_cwe_pivot.set_index('CWE Names')['Count']
                     st.bar_chart(chart_data,horizontal=True)
@@ -169,13 +172,13 @@ def sast():
                 st.subheader(f"Findings by Vulnerability Class")
                 vuln1,vuln2 = st.columns(2)
                 with vuln1:
-                    st.dataframe(df_vclass_pivot,hide_index=True)
+                    st.dataframe(df_vclass_pivot,hide_index=True,height=colsizer(df_vclass_pivot))
                 with vuln2: 
                     chart_data = df_vclass_pivot.set_index('Vuln Class')['Count']
                     st.bar_chart(chart_data,horizontal=True)
 
                 st.subheader("Filtered Data")
-                st.dataframe(df_filtered[display_columns],hide_index=True)
+                st.dataframe(df_filtered[display_columns],hide_index=True,height=colsizer(df_filtered))
             else:
                 st.write("No data found, please adjust your data range.")
     except NameError:
@@ -196,11 +199,9 @@ def sca():
             df = pd.read_json(sca_uploaded_file)
     
     try:
-        #st.dataframe(df,hide_index=True)
         if not df.empty:   
-            # Strip timezone
-            df['created_at'] = pd.to_datetime(df['created_at'],format='%Y-%m-%d %H:%M:%S').dt.tz_convert(None)
-            
+            df['created_at'] = pd.to_datetime(df['created_at']).dt.tz_convert("UTC")
+            df['status_updated_at'] = pd.to_datetime(df['created_at']).dt.tz_convert("UTC")
             
             # Flatten the columns that contain JSON structures
             df=pd.json_normalize(df.apply(flatten_columns,axis=1))
@@ -212,13 +213,13 @@ def sca():
             d1,d2 = st.columns(2)
             with d1:
                 og_start_date = st.date_input("Start Date",default_start)
-                start_date = pd.to_datetime(og_start_date)
+                start_date = pd.to_datetime(og_start_date).tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
             with d2: 
                 og_end_date = st.date_input("End Date",today)
-                end_date = pd.to_datetime(og_end_date)
-
+                end_date = pd.to_datetime(og_end_date).tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
+            st.write(start_date,end_date)
             # Filter out based on date range entered
-            df_filtered = df[(df['created_at'] >= start_date) & (df['created_at'] <= end_date)]
+            df_filtered = df[((df['created_at'] >= start_date) & (df['created_at'] <= end_date)) | ((df["state_updated_at"] >= start_date) & (df["state_updated_at"] <= end_date) & df["status"]=="fixed")]
            
             if len(df_filtered)> 0:
                 # Change display columns based on what you need. 
@@ -296,7 +297,7 @@ def sca():
                 pv1, pv2 = st.columns(2)
                 with pv1: 
                     # Display pivot table with fix rate
-                    st.dataframe(df_pivot,hide_index=True)
+                    st.dataframe(df_pivot,hide_index=True,height=colsizer(df_pivot))
                 with pv2:
                     chart_data= df_pivot.set_index("severity")[["open","fixed"]]
                     colors = ["#1f77b4", "#ff7f0e"]
@@ -305,14 +306,14 @@ def sca():
                 st.subheader(f"Findings by CVE")
                 cve1, cve2 = st.columns(2)
                 with cve1:
-                    st.dataframe(df_cve_pivot,hide_index=True)
+                    st.dataframe(df_cve_pivot,hide_index=True,height=colsizer(df_cve_pivot))
                 with cve2:
                     chart_data = df_cve_pivot.set_index('CVE')['Count']
                     st.bar_chart(chart_data,horizontal=True)
                 st.subheader(f"Findings by CWE")
                 cwe1, cwe2 = st.columns(2)
                 with cwe1:
-                    st.dataframe(df_cwe_pivot,hide_index=True)
+                    st.dataframe(df_cwe_pivot,hide_index=True,height=colsizer(df_cwe_pivot))
                 with cwe2:
                     chart_data = df_cwe_pivot.set_index('CWE Names')['Count']
                     st.bar_chart(chart_data,horizontal=True)
@@ -320,13 +321,13 @@ def sca():
                 st.subheader(f"Findings by Vulnerability Class")
                 vuln1,vuln2 = st.columns(2)
                 with vuln1:
-                    st.dataframe(df_vclass_pivot,hide_index=True)
+                    st.dataframe(df_vclass_pivot,hide_index=True,height=colsizer(df_vclass_pivot))
                 with vuln2: 
                     chart_data = df_vclass_pivot.set_index('Vuln Class')['Count']
                     st.bar_chart(chart_data,horizontal=True)
 
                 st.subheader("Filtered Data")
-                st.dataframe(df_filtered[display_columns],hide_index=True)
+                st.dataframe(df_filtered[display_columns],hide_index=True,height=colsizer(df_filtered))
             else:
                 st.write("No data found, please adjust your data range.")
     except NameError:
@@ -350,7 +351,7 @@ def inspector():
         if not df.empty:   
             # Strip timezone
             df['CreatedAt'] = pd.to_datetime(df['CreatedAt'],format='ISO8601').dt.tz_convert(None)
-            
+            df['UpdatedAt']=pd.to_datetime(df['UpdatedAt'],format='ISO8601').dt.tz_convert(None)
             # Flatten the columns that contain JSON structures
             df=pd.json_normalize(df.apply(flatten_columns,axis=1))
             
@@ -364,7 +365,7 @@ def inspector():
                 end_date = pd.to_datetime(og_end_date,format='ISO8601')
 
             # Filter out based on date range entered
-            df_filtered = df[(df['CreatedAt'] >= start_date) & (df['CreatedAt'] <= end_date)]
+            df_filtered = df[((df['CreatedAt'] >= start_date) & (df['CreatedAt'] <= end_date)) | ((df['UpdatedAt'] >= start_date) & (df['UpdatedAt'] <= end_date) & df['RecordState']=="ARCHIVED")]
            
             
             # RecordState - ACTIVE / ARCHIVED
@@ -422,7 +423,7 @@ def inspector():
             st.subheader("Overall Fix Rate")
             fr1,fr2 = st.columns(2)
             with fr1:
-                st.dataframe(df_pivot,hide_index=True,width=500)
+                st.dataframe(df_pivot,hide_index=True,width=500,height=colsizer(df_pivot))
             with fr2:
                 chart_data= df_pivot.set_index("Severity")[["ACTIVE","ARCHIVED"]]
                 
@@ -431,7 +432,7 @@ def inspector():
             st.subheader("Fix Rate by Resource Type")
             fr3,fr4 = st.columns(2)
             with fr3:
-                st.dataframe(df_pivot_type,hide_index=True,width=500)
+                st.dataframe(df_pivot_type,hide_index=True,width=500,height=colsizer(df_pivot_type))
             with fr4:
                 chart_data= df_pivot_type.set_index("Resource Type")[["ACTIVE","ARCHIVED"]]
                 
@@ -442,12 +443,12 @@ def inspector():
             
             selected_column = st.selectbox("Select a column to filter by",columns)
             if not selected_column == "All":
-                unique_values=df[selected_column].unique()
+                unique_values=df_filtered[selected_column].unique()
                 selected_value=st.selectbox("Select Values",unique_values)
-                filtered_df=df[df[selected_column]==selected_value]
+                filtered_df=df_filtered[df_filtered[selected_column]==selected_value]
             else:
-                filtered_df=df
-            st.dataframe(filtered_df,hide_index=True,height=800)
+                filtered_df=df_filtered
+            st.dataframe(filtered_df,hide_index=True,height=colsizer(filtered_df))
     
         
     
@@ -507,7 +508,7 @@ def inventory():
 
             st.subheader("Filtered Data")
             df["AWS Account"]=df["AWS Account"].astype(str)
-            st.dataframe(df,hide_index=True, height=1000)
+            st.dataframe(df,hide_index=True,height=colsizer(df))
     
     except NameError:
         st.write("Waiting for data file.")
