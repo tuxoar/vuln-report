@@ -29,6 +29,8 @@ def home():
 
 def colsizer(df):
     col_height=(len(df)+1)*35
+    if col_height > 50000:
+        col_height=50000
     return col_height
 
 def flatten_columns(json_data, parent_key="", sep="."):
@@ -217,7 +219,7 @@ def sca():
             with d2: 
                 og_end_date = st.date_input("End Date",today)
                 end_date = pd.to_datetime(og_end_date).tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
-            st.write(start_date,end_date)
+
             # Filter out based on date range entered
             df_filtered = df[((df['created_at'] >= start_date) & (df['created_at'] <= end_date)) | ((df["state_updated_at"] >= start_date) & (df["state_updated_at"] <= end_date) & df["status"]=="fixed")]
            
@@ -367,7 +369,6 @@ def inspector():
             # Filter out based on date range entered
             df_filtered = df[((df['CreatedAt'] >= start_date) & (df['CreatedAt'] <= end_date)) | ((df['UpdatedAt'] >= start_date) & (df['UpdatedAt'] <= end_date) & df['RecordState']=="ARCHIVED")]
            
-            
             # RecordState - ACTIVE / ARCHIVED
             # Filter by Types, Region, Resources[0].Type, Vulnerabilities[0].Id
             # Define all severity levels in case some are missing
@@ -388,6 +389,7 @@ def inspector():
                 .reindex(columns=all_status,fill_value=0)
                 .reset_index()
             )
+            
             # Calculate fix rate and format
             df_pivot["Fix Rate"] = (
                 (df_pivot["ARCHIVED"] / (df_pivot["ARCHIVED"] + df_pivot["ACTIVE"]))
@@ -408,8 +410,10 @@ def inspector():
                     aggfunc="count",
                     fill_value=0
                 )
+                .reindex(columns=all_status,fill_value=0)
                 .reset_index()
             )
+
             # Calculate fix rate and format
             df_pivot_type["Fix Rate"] = (
                 (df_pivot_type["ARCHIVED"] / (df_pivot_type["ARCHIVED"] + df_pivot_type["ACTIVE"]))
@@ -448,6 +452,7 @@ def inspector():
                 filtered_df=df_filtered[df_filtered[selected_column]==selected_value]
             else:
                 filtered_df=df_filtered
+            
             st.dataframe(filtered_df,hide_index=True,height=colsizer(filtered_df))
     
         
