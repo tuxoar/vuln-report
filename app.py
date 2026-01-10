@@ -25,7 +25,7 @@ default_start = today - timedelta(days=30)
 def home():
     st.title(my_titles[0])
     st.write("Use the buttons above to crunch a report on the type of data you're working with.")
-    st.write("With the exception of Inventory requiring CSV, all other reports take JSON as input.")
+    st.write("With the exception of Inventory requiring CSV, all other reports take JSON or JSONL as input.")
 
 def colsizer(df):
     col_height=(len(df)+1)*35
@@ -65,16 +65,16 @@ def flatten_columns(json_data, parent_key="", sep="."):
 def sast():
     st.title(my_titles[1])
     if st.session_state.active_page == my_titles[1]:
-        sast_uploaded_file = st.file_uploader("Upload a SAST file for analysis:",type=["json"])
+        sast_uploaded_file = st.file_uploader("Upload a SAST file for analysis:",type=["json", "jsonl"])
         if "sast" in st.session_state.uploaded_files:
             st.write(f"Utilizing previously uploaded file: {st.session_state.uploaded_files['sast'].name}")
             sast_file=st.session_state.uploaded_files['sast']
             sast_file.seek(0)
-            df = pd.read_json(sast_file)
+            df = pd.read_json(sast_file, lines=sast_file.name.endswith('.jsonl'))
         if sast_uploaded_file:
             st.success(f"File uploaded: {sast_uploaded_file.name}")
             st.session_state.uploaded_files['sast']=sast_uploaded_file
-            df = pd.read_json(sast_uploaded_file)
+            df = pd.read_json(sast_uploaded_file, lines=sast_uploaded_file.name.endswith('.jsonl'))
     try:
         if not df.empty:   
             df['created_at'] = pd.to_datetime(df['created_at']).dt.tz_convert("UTC")
@@ -189,16 +189,16 @@ def sast():
 def sca():
     st.title(my_titles[2])
     if st.session_state.active_page == my_titles[2]:
-        sca_uploaded_file = st.file_uploader("Upload a SCA file for analysis:",type=["json"])
+        sca_uploaded_file = st.file_uploader("Upload a SCA file for analysis:",type=["json", "jsonl"])
         if "sca" in st.session_state.uploaded_files :
             st.write(f"Utilizing previously uploaded file: {st.session_state.uploaded_files['sca'].name}")
             sca_file=st.session_state.uploaded_files['sca']
             sca_file.seek(0)
-            df = pd.read_json(sca_file)
+            df = pd.read_json(sca_file, lines=sca_file.name.endswith('.jsonl'))
         if sca_uploaded_file:
             st.success(f"File uploaded: {sca_uploaded_file.name}")
             st.session_state.uploaded_files['sca']=sca_uploaded_file
-            df = pd.read_json(sca_uploaded_file)
+            df = pd.read_json(sca_uploaded_file, lines=sca_uploaded_file.name.endswith('.jsonl'))
     
     try:
         if not df.empty:   
@@ -338,16 +338,16 @@ def sca():
 def inspector():
     st.title(my_titles[3])
     if st.session_state.active_page == my_titles[3]:
-        inspector_uploaded_file = st.file_uploader("Upload an Inspector file for analysis:",type=["json"])
+        inspector_uploaded_file = st.file_uploader("Upload an Inspector file for analysis:",type=["json", "jsonl"])
         if "ins" in st.session_state.uploaded_files:
             st.write(f"Utilizing previously uploaded file: {st.session_state.uploaded_files['ins'].name}")
             inspector_file=st.session_state.uploaded_files['ins']
             inspector_file.seek(0)
-            df = pd.read_json(inspector_file)
+            df = pd.read_json(inspector_file, lines=inspector_file.name.endswith('.jsonl'))
         if inspector_uploaded_file:
             st.success(f"File uploaded: {inspector_uploaded_file.name}")
             st.session_state.uploaded_files['ins']=inspector_uploaded_file
-            df = pd.read_json(inspector_uploaded_file)
+            df = pd.read_json(inspector_uploaded_file, lines=inspector_uploaded_file.name.endswith('.jsonl'))
            
     try:
         if not df.empty:   
